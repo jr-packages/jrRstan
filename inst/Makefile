@@ -57,6 +57,7 @@ clean:
 
 cleaner:
 	make clean
+	rm -fv *.rds
 	rm -fv figure
 	rm -fv cache
 	rm -fv ../vignettes/*.pdf
