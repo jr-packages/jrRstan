@@ -1,0 +1,27 @@
+Package: jrRstan
+Type: Package
+Title: The jrRstan package
+Version: 0.1.0
+Date: 2017-01-23
+Authors@R: person("Sarah", "Heaps",
+    email="sarah.heaps@ncl.ac.uk", role =
+    c("aut", "cre"))
+Maintainer: Sarah Heaps
+    <sarah.heaps@ncl.ac.uk>
+Description: A package for the Jumping
+    Rivers R courses.
+URL: http://www.jumpingrivers.com/
+VignetteBuilder: R.rsp
+License: GPL-3 | GPL-2
+Depends:
+    plyr,
+    stats,
+    grDevices,
+    graphics
+Suggests: 
+    Rdpack,
+    R.rsp
+LazyData: TRUE
+RoxygenNote: 6.0.1
+RdMacros: Rdpack
+
