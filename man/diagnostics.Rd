@@ -43,3 +43,4 @@ dimnames(srs) = list(NULL, NULL, paste("theta[",1:4,"]",sep=""))
 diagnostics(srs)
 
 }
+

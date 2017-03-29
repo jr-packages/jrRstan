@@ -1,0 +1,532 @@
+%\VignetteIndexEntry{practical1}
+%\VignetteEngine{knitr::knitr}
+<<echo=FALSE>>=
+results = "hide"; echo = FALSE
+@
+\documentclass[a4paper,justified,openany]{tufte-handout}
+
+<<setup, include=FALSE, cache=FALSE>>=
+library(knitr)
+library(rstan)
+#options(replace.assign=FALSE,width=50)
+
+#opts_chunk$set(fig.path='knitr_figure/graphics-', 
+#               cache.path='knitr_cache/graphics-', 
+#               fig.align='center', 
+#               dev='pdf', fig.width=5, fig.height=5, 
+#               fig.show='hold', cache=FALSE, par=TRUE)
+#knit_hooks$set(crop=hook_pdfcrop)
+
+#knit_hooks$set(par=function(before, options, envir){
+#    if (before && options$fig.show!='none') {
+#        par(mar=c(3,3,2,1),cex.lab=.95,cex.axis=.9,
+#            mgp=c(2,.7,0),tcl=-.01, las=1)
+#}}, crop=hook_pdfcrop)
+
+opts_chunk$set(size="small")
+@
+\usepackage{amsmath}
+
+
+% Set up the images/graphics package
+\usepackage{graphicx}
+\setkeys{Gin}{width=\linewidth,totalheight=\textheight,keepaspectratio}
+\graphicspath{{graphics/}}
+
+%% Sarah's new commands:
+%\usepackage{fancyvrb}
+%\usepackage{color}
+\usepackage{bm}
+\usepackage[caption=false]{subfig}
+\newcommand{\vect}[1]{\bm{#1}}
+\newcommand{\matr}[1]{#1}
+\newcommand{\transpose}{^\mathrm{T}}
+\newcommand{\norm}{\mathrm{N}}
+\newcommand{\lnorm}{\mathrm{LN}}
+\newcommand{\bern}{\mathrm{Bern}}
+\newcommand{\gam}{\mathrm{Gam}}
+\newcommand{\bet}{\mathrm{Beta}}
+\newcommand{\pois}{\mathrm{Po}}
+\newcommand{\expo}{\mathrm{Exp}}
+
+
+
+%% Stan code highlighting:
+\usepackage{fancyvrb}
+<<echo=FALSE, results='asis'>>=
+library(stanhl)
+### hack starts! ###
+library(knitr)
+library(highlight)
+
+sc_split = function(string) {
+  if (is.call(string)) string = eval(string)
+  if (is.numeric(string) || length(string) != 1L) return(string)
+  stringr::str_trim(stringr::str_split(string, ';|,')[[1]])
+}
+
+color_def = function(col, variable = 'shadecolor') {
+  if (is.na(col)) return('')  # no LaTeX code when color is NA
+  x = if (length(col) == 1L) sc_split(col) else col
+  if ((n <- length(x)) != 3L) {
+    if (n == 1L) x = drop(col2rgb(x) / 255) else {
+      x = switch(variable, shadecolor = rep(.97, 3), fgcolor = rep(0, 3))
+      warning("the color '", col, "' is invalid;",
+              'using default color...',
+              'see http://yihui.name/knitr/options')
+    }
+  }
+  if (length(x) != 3L) stop('invalid color:', col)
+  if (is.numeric(x)) x = round(x, 3L)
+  outdec = options(OutDec = '.'); on.exit(options(outdec))
+  sprintf('\\definecolor{%s}{rgb}{%s, %s, %s}', variable, x[1], x[2], x[3])
+}
+
+theme_to_header_latex = function(theme) {
+  css_file = if (file.exists(theme)) theme else {
+    system.file('themes', sprintf('%s.css', theme), package = 'knitr', mustWork = TRUE)
+  }
+  css_out = css.parser(css_file)
+
+  # get background and foreground colors
+  background = css_out$background$color
+  foreground = css_out$std$color
+
+  # write latex highlight header
+  fgheader = color_def(foreground, 'fgcolor')
+  highlight = paste(c(fgheader, styler_assistant_latex(css_out[-1])), collapse = '\n')
+  list(highlight = highlight, background = background, foreground = foreground)
+}
+
+.default.sty = file.path(path.package("knitr"), 'themes', 'default.css')
+.header.hi.html = theme_to_header_latex(.default.sty)$highlight
+rm(.default.sty)
+### hack ends! ###
+stanhl_latex()
+stanhlv2 = function(x) {
+  cat("\\small\\begin{kframe}\n")
+  stanhl(x)
+  cat("\n\\end{kframe}")
+}
+@
+
+
+
+
+\title{Introduction to Bayesian inference using Rstan: practical 1 \Sexpr{ifelse(echo, "solutions", "")}}  
+%\author[Dr Colin Gillespie]{Dr Colin Gillespie}
+\date{}  % if the \date{} command is left out, the current date will be used
+
+\usepackage{booktabs}
+
+% The units package provides nice, non-stacked fractions and better spacing
+% for units.
+\usepackage{units}
+
+% The fancyvrb package lets us customize the formatting of verbatim
+% environments.  We use a slightly smaller font.
+%\usepackage{fancyvrb}
+%\fvset{fontsize=\normalsize}
+\newcommand{\cc}{\texttt}
+\graphicspath{{../graphics/}}
+\setcounter{secnumdepth}{2}
+\usepackage{microtype}
+\begin{document}
+
+\maketitle% this prints the handout title, author, and date
+
+\begin{abstract}
+The aim of this practical is to provide an introduction to the syntax and structure of the Stan programming language and to demonstrate some of the efficiency gains that can be achieved by using vectorized operations.
+\end{abstract}
+
+\section{Getting started}
+
+\subsection{Files in Rstudio}
+\begin{itemize}
+\item Open \cc{Rstudio}
+\item Open a new text file:
+\begin{verbatim}
+    File -> New File -> Text File
+\end{verbatim}
+and type the following Stan programme:
+<<echo=FALSE, results="asis">>=
+m = "
+data {
+  int<lower=1> N;
+  real<lower=0,upper=1> p;
+}
+model {
+}
+generated quantities {
+  int x[N];
+  for(n in 1:N) {
+    x[n] = bernoulli_rng(p);
+  }
+}
+"
+stanhlv2(m)
+@
+\noindent \normalsize Save the text file as \cc{simulation.stan}.
+\item Open a new R script:
+\begin{verbatim}
+    File -> New File -> R Script
+\end{verbatim}
+and type the following sequence of commands, omitting the comments if you wish:
+<<fig.keep="none", eval=TRUE, message=FALSE, warning=FALSE, error=FALSE, cache=TRUE, results="hide">>=
+## Load the rstan package:
+library(rstan)
+## Allow rstan to exploit parallel computation:
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
+## Set up some constants to pass to Stan:
+constants = list(N=30, p=0.8)
+## Compile and run Stan programme:
+output = stan(file="simulation.stan", data=constants, iter=1, 
+              chains=1, algorithm="Fixed_param")
+## Extract simulated data:
+out = as.matrix(output)
+dim(out)
+head(out)
+## Format as vector, removing the log posterior (i.e. "__lp"):
+x = out[1, -length(out)]
+## Plot data:
+barplot(table(x))
+@
+\noindent \normalsize  Save the R script. Note that Rstudio will correctly add the file extension \cc{.R}. We can run our R script by sending the commands to the R console. For example, to send one line at a time, press \mbox{\cc{Ctrl + Enter}} at the end of each line in turn.
+\end{itemize}
+
+\subsection{Course R package}
+
+Installing the the course R package is straightforward. First install \cc{drat}:
+
+<<eval=FALSE, tidy=FALSE>>=
+install.packages("drat")
+@
+
+\noindent Then
+
+<<eval=FALSE, tidy=FALSE>>=
+drat::addRepo("rcourses")
+install.packages("jrRstan")
+@ 
+
+\noindent This R package contains copies of the practicals, solutions and data sets for the course in addition to some helpful functions that we will use. To load the package, use
+
+<<message=FALSE>>=
+library("jrRstan")
+@ 
+
+\section{Simulating data}
+In the Stan programme above, we are not attempting to carry out any inference. Instead we're using the \cc{generated quantities} block to sample some data; in this case a random sample of size $30$ from the Bernoulli distribution with probability $0.8$. In other words a sequence of 30 $0$s and $1$s where the probability of getting a $1$ is $0.8$. When we simply want to use Stan to simulate data in this way, notice that the (required) model block is empty. We will learn about the \cc{stan} function in Chapter~4, but for now, we simply note that the \cc{file} argument should be the name of the text file where the Stan programme is saved and, if the programme contains a \cc{data} block, the \cc{data} argument should be a \cc{list} with a named element for each variable declared. When it is being used to simulate data, we generally set \cc{algorithm="Fixed\_param"}, \cc{iter=1} and \cc{chains=1}. 
+
+\begin{itemize}
+\item What happens if you try to pass a value for \cc{N} or \cc{p} that violates the constraints in the \cc{data} block? For example, what happens if you set:
+<<echo=c(1,echo*2), eval=c(1,echo*2)>>=
+faulty_constants = list(N=30, p=10)
+stan(file="simulation.stan", data=faulty_constants, iter=1, 
+              chains=1, algorithm="Fixed_param")
+@
+
+\item Add a \cc{transformed parameter} block and include a print statement to check whether the constants, \cc{N} and \cc{p}, have been correctly passed.
+
+<<eval=echo, echo=FALSE, results="asis">>=
+m = "
+// Modified Stan programme, saved in simulation.stan:
+data {
+  int<lower=1> N;
+  real<lower=0,upper=1> p;
+}
+transformed data {
+  print(\"N = \", N, \", p = \", p);
+}
+model {
+}
+generated quantities {
+  int x[N];
+  for(n in 1:N) {
+    x[n] = bernoulli_rng(p);
+  }
+}
+"
+stanhlv2(m)
+@
+
+<<eval=echo, echo=echo, messages=FALSE, warning=FALSE>>=
+## Compile and run modified Stan programme:
+output = stan(file="simulation.stan", data=constants, iter=1, 
+              chains=1, algorithm="Fixed_param")
+@
+
+\item Rather than passing the constants \cc{N} and \cc{p} through the \cc{data}  block, we can alternatively omit the \cc{data} block and declare and assign values to these variables in the \cc{transformed data} block. We can then omit the \cc{data} argument in the call to the \cc{stan} function in R. Write a new Stan programme of this form called \cc{simulation\_v2.stan} then compile and run the programme in R.
+
+<<eval=echo, echo=FALSE, results="asis">>=
+m = "
+// New Stan programme, saved in simulation_v2.stan:
+transformed data {
+  int<lower=1> N;
+  real<lower=0,upper=1> p;
+  N = 30;
+  p = 0.8;
+}
+model {
+}
+generated quantities {
+  int x[N];
+  for(n in 1:N) {
+    x[n] = bernoulli_rng(p);
+  }
+}
+"
+stanhlv2(m)
+@
+
+<<eval=echo, echo=echo, message=FALSE, warning=FALSE, results="hide">>=
+## Compile and run new Stan programme:
+output_v2 = stan(file="simulation_v2.stan", iter=1, chains=1, 
+                 algorithm="Fixed_param")
+@
+
+\item In R, we can generate uniform random numbers using the \cc{runif} function. For example:
+<<>>=
+runif(5, min=-3, max=3)
+@
+Use the \cc{lookup} function to find a corresponding function in Stan.
+
+<<include=echo>>=
+lookup("runif")
+@
+
+\item Augment your programme \cc{simulation\_v2.stan} to additionally simulate $30$ uniform random numbers in a vector \cc{z} with lower bound $-3$ and upper bound $3$. Call the new programme \cc{simulation\_v3.stan}. Compile and run it in R and check that the output looks reasonable.
+
+<<eval=echo, echo=FALSE, results="asis">>=
+m = "
+// Modified Stan programme, saved in simulation_v3.stan:
+transformed data {
+  int<lower=1> N;
+  real<lower=0,upper=1> p;
+  real a;
+  real b;
+  N = 30;
+  p = 0.8;
+  a = -3;
+  b = 3;
+}
+model {
+}
+generated quantities {
+  int x[N];
+  vector[N] z;
+  for(n in 1:N) {
+    x[n] = bernoulli_rng(p);
+    z[n] = uniform_rng(a, b);
+  }
+}
+"
+stanhlv2(m)
+@
+
+<<eval=echo, echo=echo, message=FALSE, warning=FALSE, results="hide">>=
+## Compile and run modified Stan programme:
+output_v3 = stan(file="simulation_v3.stan", iter=1, chains=1,
+                 algorithm="Fixed_param")
+@
+
+<<FS1, eval=echo, echo=echo, fig.keep="none">>=
+## Extract simulated data:
+out_v3 = as.matrix(output_v3)
+colnames(out_v3)
+x = out_v3[1, 1:30]
+z = out_v3[1, 31:60]
+## Plot data:
+par(mfrow=c(1,2))
+barplot(table(x), main="Barplot of x")
+hist(z)
+par(mfrow=c(1,1))
+@
+
+<<ref.label='FS1', results="hide", dev='pdf', out.width='\\textwidth', eval=echo, echo=FALSE, fig.env='marginfigure', fig.cap="Simulated data.">>=
+@
+
+\item Modify \cc{simulation\_v3.stan}, saving the file as \cc{simulation\_v4.stan}, so that instead of representing \cc{x} and \cc{z} as separate objects, you represent them as a length-2 array of vectors called \cc{xz}.
+
+<<eval=echo, echo=FALSE, results="asis">>=
+m = "
+/* The generated quantities block of simulation_v3.stan 
+   should change as follows, with the result saved in 
+   simulation_v4.stan: */
+generated quantities {
+  vector[N] xz[2];
+  for(n in 1:N) {
+    xz[1][n] = bernoulli_rng(p);
+    xz[2][n] = uniform_rng(a, b);
+  }
+}
+"
+stanhlv2(m)
+@
+
+\item Modify \cc{simulation\_v4.stan}, saving the file as \cc{simulation\_v5.stan}, to additionally simulate 30 normal random variables in a vector \cc{y} where $y[n]$ has mean \cc{2.5 * x[n] + 1.5 * z[n]} and standard deviation $0.1$. Compile and run your Stan programme in R and check that the output looks reasonable.
+
+<<eval=echo, echo=FALSE, results="asis">>=
+m = "
+/* The generated quantities block of simulation_v4.stan 
+   should change as follows, with the result saved in 
+   simulation_v5.stan: */
+generated quantities {
+  vector[N] y;
+  vector[N] xz[2];
+  for(n in 1:N) {
+    xz[1][n] = bernoulli_rng(p);
+    xz[2][n] = uniform_rng(a, b);
+    y[n] = normal_rng(2.5 * xz[1][n] + 1.5 * xz[2][n], 0.1);
+  }
+}
+"
+stanhlv2(m)
+@
+
+<<eval=echo, echo=echo, message=FALSE, warning=FALSE, results="hide">>=
+## Compile and run Stan programme:
+output_v5 = stan(file="simulation_v5.stan", iter=1, chains=1, 
+                algorithm="Fixed_param")
+@
+
+<<FS2, eval=echo, echo=echo, fig.keep="none">>=
+## Extract simulated data:
+out_v5 = as.matrix(output_v5)
+colnames(out_v5)
+y = out_v5[1, 1:30]
+x = out_v5[1, seq(31, 90, 2)]
+z = out_v5[1, seq(32, 90, 2)]
+## Plot:
+plot(z, y, main="Scatter plot of z vs y")
+@
+
+<<ref.label='FS2', results="hide", dev='pdf', out.width='\\textwidth', eval=echo, echo=FALSE, fig.env='marginfigure', fig.cap="Scatter plot of simulated data.">>=
+@
+
+\item If you wanted your Stan programme to return only \cc{y} and not \cc{xz} how could you modify your code?
+
+<<eval=echo, echo=FALSE, results="asis">>=
+m = "
+/* The generated quantities block of simulation_v5.stan 
+   should become: */
+generated quantities {
+  vector[N] y;
+  for(n in 1:N) {
+    /* Define xz in a block so that it becomes a
+       local variable that will not be printed */
+       real xz[2];
+    xz[1] = bernoulli_rng(p);
+    xz[2] = uniform_rng(a, b);
+    y[n] = normal_rng(2.5 * xz[1] + 1.5 * xz[2], 0.1);
+  }
+}
+"
+stanhlv2(m)
+@
+
+\end{itemize}
+
+\section{Vectorized operations}
+In this part of the practical we will investigate the efficiency gains we can realise through the vectorized operations discussed in Chapter~3.
+
+\begin{itemize}
+\item Copy the Stan programme from Figure 3.1 into a text file and save it as \cc{figure3\_1.stan}.
+\item Create a revised version of this programme which exploits the vectorization tricks described later in the Chapter. Save it as \cc{figure3\_1\_v2.stan}. Note that in lectures we considered optimising only the \cc{model} block. It is also possible to make the \cc{functions} and \cc{generated quantities} blocks more efficient.
+<<eval=echo, echo=FALSE, results="asis">>=
+m = "
+functions {
+  real deviance(vector y, matrix X, vector beta, real sigma_sq) {
+    real dev;
+    vector[num_elements(y)] eta;
+    eta = X * beta; // Single matrix-vector calculation
+    dev = (-2) * normal_lpdf(y | eta, sqrt(sigma_sq)); /* 
+                                  Vectorized form of the normal 
+                                  probability function */
+    return dev;
+  }
+}
+data {
+  int<lower=1> K;           // No. columns in design matrix
+  int<lower=1> N;           // Sample size
+  matrix[N, K] X;           // Design matrix
+  vector[N] y;              // Response variables
+  row_vector[K] x_pred;     // Design matrix for prediction
+  real m_beta[K];           // Prior means for beta[k]
+  real m_sigma_sq;          // Prior mean for log(sigma_sq)
+  real<lower=0> s_beta[K];  // Prior std. devs for beta[k]
+  real<lower=0> s_sigma_sq; // Prior std. dev for log(sigma_sq)
+}
+parameters {
+  real<lower=0> sigma_sq;
+  vector[K] beta;
+}
+model {
+  // Likelihood:
+  vector[N] eta;
+  eta = X * beta; // Single matrix-vector calculation
+  y ~ normal(eta, sqrt(sigma_sq)); /* Vectorized form of the normal 
+                                      probability function */
+  // Prior:
+  beta ~ normal(m_beta, s_beta);  /* Vectorized form of the normal 
+                                      probability function */
+  sigma_sq ~ lognormal(m_sigma_sq, s_sigma_sq);
+}
+generated quantities {
+  real y_pred;  // Predicted response
+  real dev; // Deviance
+  // Sample from predictive distribution:
+  {
+    real eta_pred; /* Predicted mean; defined in local
+                      block so not stored */
+    eta_pred = x_pred * beta; /* Single matrix-vector 
+                                 calculation */
+    y_pred = normal_rng(eta_pred, sqrt(sigma_sq));
+  }
+  dev = deviance(y, X, beta, sigma_sq);
+}
+"
+stanhlv2(m)
+@
+\item Load the data to pass to the Stan function. For convenience in this practical, the \cc{list} that we will construct in Chapter~4 has been saved in a data set called \cc{practical1\_data} which can be loaded through:
+<<>>=
+## Load data to pass to stan function:
+data(practical1_data)
+@
+\noindent We can now compile and run each programme by executing the following code:
+<<echo=FALSE, message=FALSE, warning=FALSE, results="hide", cache=TRUE>>=
+## Run the programme from Figure 3.1:
+fig3_1 = stan("figure3_1.stan", data=practical1_data)
+## Run the revised programme:
+fig3_1_v2 = stan("figure3_1_v2.stan", data=practical1_data)
+@
+<<eval=FALSE>>=
+## Run the programme from Figure 3.1:
+fig3_1 = stan("figure3_1.stan", data=practical1_data)
+## Run the revised programme:
+fig3_1_v2 = stan("figure3_1_v2.stan", data=practical1_data)
+@
+We will consider the \cc{stan} function and its usage in Chapter~4. For now, simply make a note of the time taken to run each programme. (It will be printed at the bottom of the Stan output). How much speed-up do you gain by using the revised programme?
+
+<<eval=echo, echo=echo>>=
+## I get a substantial speed up on my machine:
+get_elapsed_time(fig3_1)
+get_elapsed_time(fig3_1_v2)
+@
+
+\end{itemize}
+
+
+\section*{Solutions}
+
+Solutions are available as a vignette:
+<<eval=FALSE>>=
+library("jrRstan")
+vignette("solutions1", package="jrRstan")
+@
+
+
+
+
+\end{document}

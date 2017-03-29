@@ -1,0 +1,951 @@
+%\VignetteIndexEntry{practical2}
+%\VignetteEngine{knitr::knitr}
+<<echo=FALSE>>=
+results = "hide"; echo = FALSE
+@
+\documentclass[a4paper,justified,openany]{tufte-handout}
+
+<<setup, include=FALSE, cache=FALSE>>=
+library(knitr)
+library(rstan)
+#options(replace.assign=FALSE,width=50)
+
+#opts_chunk$set(fig.path='knitr_figure/graphics-', 
+#               cache.path='knitr_cache/graphics-', 
+#               fig.align='center', 
+#               dev='pdf', fig.width=5, fig.height=5, 
+#               fig.show='hold', cache=FALSE, par=TRUE)
+#knit_hooks$set(crop=hook_pdfcrop)
+
+#knit_hooks$set(par=function(before, options, envir){
+#    if (before && options$fig.show!='none') {
+#        par(mar=c(3,3,2,1),cex.lab=.95,cex.axis=.9,
+#            mgp=c(2,.7,0),tcl=-.01, las=1)
+#}}, crop=hook_pdfcrop)
+
+opts_chunk$set(size="small")
+@
+\usepackage{amsmath}
+
+
+% Set up the images/graphics package
+\usepackage{graphicx}
+\setkeys{Gin}{width=\linewidth,totalheight=\textheight,keepaspectratio}
+\graphicspath{{graphics/}}
+
+%% Sarah's new commands:
+%\usepackage{fancyvrb}
+%\usepackage{color}
+\usepackage{bm}
+\usepackage[caption=false]{subfig}
+\newcommand{\vect}[1]{\bm{#1}}
+\newcommand{\matr}[1]{#1}
+\newcommand{\transpose}{^\mathrm{T}}
+\newcommand{\norm}{\mathrm{N}}
+\newcommand{\lnorm}{\mathrm{LN}}
+\newcommand{\bern}{\mathrm{Bern}}
+\newcommand{\bin}{\mathrm{Bin}}
+\newcommand{\gam}{\mathrm{Gam}}
+\newcommand{\bet}{\mathrm{Beta}}
+\newcommand{\pois}{\mathrm{Po}}
+\newcommand{\expo}{\mathrm{Exp}}
+
+
+
+%% Stan code highlighting:
+\usepackage{fancyvrb}
+<<echo=FALSE, results='asis'>>=
+library(stanhl)
+### hack starts! ###
+library(knitr)
+library(highlight)
+
+sc_split = function(string) {
+  if (is.call(string)) string = eval(string)
+  if (is.numeric(string) || length(string) != 1L) return(string)
+  stringr::str_trim(stringr::str_split(string, ';|,')[[1]])
+}
+
+color_def = function(col, variable = 'shadecolor') {
+  if (is.na(col)) return('')  # no LaTeX code when color is NA
+  x = if (length(col) == 1L) sc_split(col) else col
+  if ((n <- length(x)) != 3L) {
+    if (n == 1L) x = drop(col2rgb(x) / 255) else {
+      x = switch(variable, shadecolor = rep(.97, 3), fgcolor = rep(0, 3))
+      warning("the color '", col, "' is invalid;",
+              'using default color...',
+              'see http://yihui.name/knitr/options')
+    }
+  }
+  if (length(x) != 3L) stop('invalid color:', col)
+  if (is.numeric(x)) x = round(x, 3L)
+  outdec = options(OutDec = '.'); on.exit(options(outdec))
+  sprintf('\\definecolor{%s}{rgb}{%s, %s, %s}', variable, x[1], x[2], x[3])
+}
+
+theme_to_header_latex = function(theme) {
+  css_file = if (file.exists(theme)) theme else {
+    system.file('themes', sprintf('%s.css', theme), package = 'knitr', mustWork = TRUE)
+  }
+  css_out = css.parser(css_file)
+
+  # get background and foreground colors
+  background = css_out$background$color
+  foreground = css_out$std$color
+
+  # write latex highlight header
+  fgheader = color_def(foreground, 'fgcolor')
+  highlight = paste(c(fgheader, styler_assistant_latex(css_out[-1])), collapse = '\n')
+  list(highlight = highlight, background = background, foreground = foreground)
+}
+
+.default.sty = file.path(path.package("knitr"), 'themes', 'default.css')
+.header.hi.html = theme_to_header_latex(.default.sty)$highlight
+rm(.default.sty)
+### hack ends! ###
+stanhl_latex()
+stanhlv2 = function(x) {
+  cat("\\small\\begin{kframe}\n")
+  stanhl(x)
+  cat("\n\\end{kframe}")
+}
+@
+
+
+
+
+\title{Introduction to Bayesian inference using Rstan: practical 2 \Sexpr{ifelse(echo, "solutions", "")}}  
+%\author[Dr Colin Gillespie]{Dr Colin Gillespie}
+\date{}  % if the \date{} command is left out, the current date will be used
+
+\usepackage{booktabs}
+
+% The units package provides nice, non-stacked fractions and better spacing
+% for units.
+\usepackage{units}
+
+% The fancyvrb package lets us customize the formatting of verbatim
+% environments.  We use a slightly smaller font.
+%\usepackage{fancyvrb}
+%\fvset{fontsize=\normalsize}
+\newcommand{\cc}{\texttt}
+\graphicspath{{../graphics/}}
+\setcounter{secnumdepth}{2}
+\usepackage{microtype}
+\begin{document}
+
+\maketitle% this prints the handout title, author, and date
+
+\begin{abstract}
+The aim of this practical is to provide some practical experience in writing Stan programmes and using the \cc{rstan} package for posterior inference. Some sections require more experience with statistics than others. These are marked with an asterisk.
+\end{abstract}
+
+First load the \cc{rstan} and \cc{jrRstan} packages:
+<<message=FALSE, warning=FALSE>>=
+library("rstan")
+library("jrRstan")
+@
+\noindent If you have enough RAM, set options to allow parallel computation:
+<<message=FALSE, warning=FALSE>>=
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
+@
+
+\section{Binomial regression}
+In Section~5.2 we considered a generalised linear model in which we assumed a \emph{Poisson} error distribution. In this section we will consider another regression problem, but this time we will use a \emph{binomial} error distribution. This is called \emph{binomial regression}. In the special case where a \emph{logistic}\sidenote{Other possibilities include the \emph{probit} link or the \emph{complementary log-log} link.} link function is utilised, the name \emph{logistic regression} is often used. We will use a logistic link function in this example.
+
+As you might expect, the proportion of people who suffer side effects from a drug typically depends on the dose of that drug they are given. The \cc{jrRstan} package contains a data set called \cc{sideeffect} which can be loaded via:
+<<>>=
+data(sideeffect)
+head(sideeffect)
+@
+For each of a number of doses (\cc{dose}), the data set contains the number (\cc{n}) of patients given a particular drug to treat a medical condition, and the number of those patients suffering from a particular side effect (\cc{effects}).
+
+Suppose that the aim is to model the number $Y_i$ of the $n_i$ patients receiving dose $i$ that suffer side effects in terms of the dose $\tilde{x}_i$ of the drug they are given. The model can be expressed as:
+\begin{equation*}
+Y_i | n_i, p_i \sim \bin(n_i, p_i), \quad \text{independently for $i=1,2,\ldots,N$},
+\end{equation*}
+where here $N=7$. We will mean centre the covariate, taking $x_i = \tilde{x}_i - \sum_{i=1}^N \tilde{x}_i/N$, and use a logistic link function to connect the linear predictor:
+\begin{equation*}
+\eta_i = \beta_1 + \beta_2 x_i
+\end{equation*}
+to the probability $p_i$ that an individual receiving dose $i$ suffers side effects. In other words:\sidenote{This is called the \emph{logistic} transformation of $\eta_i$.}
+\begin{equation*}
+p_i = \frac{e^{\eta_i}}{1 + e^{\eta_i}}.
+\end{equation*}
+or equivalently:\sidenote{This is called the \emph{logit} (or \emph{inverse logistic}) transformation of $p_i$.}
+\begin{equation*}
+\eta_i = \log \left( \frac{p_i}{1 - p_i} \right).
+\end{equation*}
+
+Our model contains two parameters: $\beta_1$ and $\beta_2$. We will adopt the following prior:
+\begin{equation*}
+\beta_1 \sim \norm(-0.27, 0.68^2), \quad \text{and, independently,} \quad \beta_2 \sim \norm(0.47, 0.31^2).
+\end{equation*}
+
+\begin{itemize}
+\item Write a Stan model to represent the model and prior above, remembering to mean-centre the covariate.
+<<eval=echo, echo=FALSE, results="asis">>=
+m = "
+// Binomial regression model, saved in sideeffect.stan
+data {
+  int<lower=1> N;           // Number doses
+  int<lower=1> K;           /* Number columns in design matrix, 
+                               i.e. number covariates + 1 */
+  matrix[N, K] Xtilde;      // Design matrix
+  int<lower=0> y[N];        // Binomial response
+  int<lower=0> n[N];        // Number patients (trials)
+  real beta_mean[K];        // Means in beta priors
+  real<lower=0> beta_sd[K]; // Standard deviations in beta priors
+}
+transformed data {
+  matrix[N, K] X; /* Centred design matrix; we could have  
+                     avoided this block by performing the 
+                     transformation in R. */
+  X[,1] = Xtilde[,1];
+  X[,2] = Xtilde[,2] - mean(Xtilde[,2]);
+}
+parameters {
+  vector[K] beta;
+}
+model {
+  vector[N] eta;
+  eta = X * beta; // Fast matrix-vector calculation
+  // Likelihood:
+  y ~ binomial_logit(n, eta); /* Arithmetically stable form of
+                                 fast, vectorized sampling 
+                                 statement */
+  // Prior:
+  beta ~ normal(beta_mean, beta_sd); /* Fast, vectorized sampling
+                                        statement */
+}
+"
+stanhlv2(m)
+@
+\normalsize
+\item Create a suitable data representation in R then compile and run the Stan programme.
+<<eval=echo, echo=echo, message=FALSE, warning=FALSE, results="hide", cache=TRUE>>=
+## Set up data to pass to stan function in its "data" argument:
+N = nrow(sideeffect)          # Number doses, i.e. 7
+K = 2                         # Number columns in design matrix
+Xtilde = matrix(1, N, K)      # Design matrix
+Xtilde[,2] = sideeffect$dose
+y = sideeffect$effects        # Binomial response
+n = sideeffect$n              # Number patients (trials)
+beta_mean = c(-0.27, 0.47)    # Means in beta priors
+beta_sd = c(0.68, 0.31)       # Standard deviations in beta priors
+
+sideeffect_data = list(N=N, K=K, y=y, n=n, Xtilde=Xtilde, 
+                       beta_mean=beta_mean, beta_sd=beta_sd)
+
+## Compile and run Stan programme:
+chains = 4
+iter = 2000
+thin = 1
+sideeffect_stan = stan("sideeffect.stan", data=sideeffect_data, 
+                       chains=chains, iter=iter, warmup=iter/2, 
+                       thin=thin)
+@
+\normalsize
+\item Check both numerical and graphical diagnostics.
+
+<<FS1, eval=echo, echo=echo, fig.keep="none">>=
+## Numerical diagnostics:
+print(sideeffect_stan)
+
+## Graphical diagnostics:
+sideeffect_stan_arr = as.array(sideeffect_stan)
+diagnostics(sideeffect_stan_arr)
+## Rhat values all close to 1, n_eff large, graphical 
+## diagnostics give no cause for concern.
+@
+
+<<ref.label='FS1', results="hide", dev='pdf', eval=echo, echo=FALSE, fig.env='figure', fig.cap="Graphical diagnostics for binomial regression.">>=
+@
+\end{itemize}
+
+\section{Random slope model for Oxboys data}
+In Section~5.3 we examined the \cc{Oxboys} data where $Y_{i,j}$ and $x_{i,j}$ denoted the $j$-th measurement of height and age on boy $i$, where $i=1,\ldots,I$ and $j=1,\ldots,J$. We can load the data in R through:
+<<>>=
+library(nlme)
+data(Oxboys)
+head(Oxboys)
+@
+\noindent In lectures, we considered a \emph{random intercept} model in which the intercept term in a regression of the height of a boy on his age could vary between individuals. In this section, we will consider an extension with both a \emph{random intercept} and a \emph{random slope} that can vary from one boy to the next. In other words we will fit a hierarchical model of the form:
+\begin{equation}\label{eq:hier_model_upper}
+Y_{i,j}  = \alpha_0 + \alpha_{1,i} + (\beta_0 + \beta_{1,i}) x_{i,j} + \epsilon_{i,j} \quad \text{where} \quad \epsilon_{i,j} | \sigma^2 \sim \norm(0, \sigma^2)
+\end{equation}
+independently for $i=1,2,\ldots,I$, $j=1,2,\ldots,J$ with:
+\begin{equation}\label{eq:hier_model_lower}
+\alpha_{1,i} | \sigma_{\alpha_1}^2 \sim \norm(0, \sigma_{\alpha_1}^2) \quad \text{and} \quad \beta_{1,i} | \sigma_{\beta_1}^2 \sim \norm(0, \sigma_{\beta_1}^2)
+\end{equation}
+independently for $i=1,2,\ldots,I$. We now have two sets of random effects: the $\alpha_{1,i}$ and the $\beta_{1,i}$.
+
+We complete our hierarchical model by specifying a prior for the parameters in the ``top'' level of the model~\eqref{eq:hier_model_upper}:
+\begin{equation*}
+\alpha_0 \sim \norm(m_{\alpha_0}, s_{\alpha_0}^2), \quad \beta_0 \sim \norm(m_{\beta_0}, s_{\beta_0}^2), \quad \sigma^2 \sim \gam(a_{\sigma^2}, b_{\sigma^2}),
+\end{equation*}
+and a \emph{hyperprior} for the parameters in the ``bottom'' level of the model~\eqref{eq:hier_model_lower}:
+\begin{equation*}
+\sigma_\alpha^2 \sim \gam(a_{\sigma_\alpha^2}, b_{\sigma_\alpha^2}), \quad \sigma_\beta^2 \sim \gam(a_{\sigma_\beta^2}, b_{\sigma_\beta^2}).
+\end{equation*}
+As in Chapter~5, when fitting the model we will take:
+\begin{alignat*}{4}
+m_{\alpha_0} &= 140,& \quad s_{\alpha_0} &= 3,& \quad m_{\beta_0} &= 15,& \quad s_{\beta_0} &= 7.5\\
+a_{\sigma^2} &= 1.1,& \quad b_{\sigma^2} &= 0.025,& && &\\ 
+a_{\sigma_\alpha^2} &= 1.1,& \quad b_{\sigma_\alpha^2} &= 0.05.& && &\\
+\intertext{For the constants $a_{\sigma_\beta^2}$ and $b_{\sigma_\beta^2}$ in the extra hyperprior for $\sigma_{\beta}^2$ we will take:}
+a_{\sigma_\beta^2} &= 1.1,& \quad b_{\sigma_\beta^2} &= 0.1.& && &
+\end{alignat*}
+
+\begin{itemize}
+\item Extend the Stan programme for the random intercept model to additionally include a random slope.
+<<eval=echo, echo=FALSE, results="asis">>=
+m = "
+// Random slope model, saved in oxboys_ranslope.stan
+data {
+  int<lower=1> N_subj;          // Number of subjects
+  int<lower=1> N;               // Sample size
+  int<lower=1> subj_label[N];   // Subject label
+  vector[N] x;                  // Covariate (age)
+  vector[N] y;                  // Response variable (height)
+  real m_alpha0;                // Prior mean for alpha0
+  real<lower=0> s_alpha0;       // Prior std. dev. for alpha0
+  real m_beta0;                 // Prior mean for beta0
+  real<lower=0> s_beta0;        // Prior std. dev. for beta0
+  real<lower=0> a_sigsq;        // Prior shape for sigsq
+  real<lower=0> b_sigsq;        // Prior rate for sigsq
+  real<lower=0> a_sigsq_alpha1; // Prior shape for sigsq_alpha1
+  real<lower=0> b_sigsq_alpha1; // Prior rate for sigsq_alpha1
+  real<lower=0> a_sigsq_beta1;  // Prior shape for sigsq_beta1
+  real<lower=0> b_sigsq_beta1;  // Prior rate for sigsq_beta1
+}
+parameters {
+  real alpha0;
+  vector[N_subj] alpha1;
+  real beta0;
+  vector[N_subj] beta1;
+  real<lower=0> sigsq;
+  real<lower=0> sigsq_alpha1;
+  real<lower=0> sigsq_beta1;
+}
+model {
+  // Likelihood:
+  vector[N] alpha;
+  vector[N] beta;
+  alpha = alpha0 + alpha1[subj_label]; // Random intercept
+  beta = beta0 + beta1[subj_label];    // Random slope
+  y ~ normal(alpha + beta .* x, sqrt(sigsq));
+  // Prior:
+  alpha0 ~ normal(m_alpha0, s_alpha0);
+  beta0 ~ normal(m_beta0, s_beta0);
+  sigsq ~ gamma(a_sigsq, b_sigsq);
+  alpha1 ~ normal(0, sqrt(sigsq_alpha1));
+  beta1 ~ normal(0, sqrt(sigsq_beta1));
+  // \"Hyper-prior\":
+  sigsq_alpha1 ~ gamma(a_sigsq_alpha1, b_sigsq_alpha1);
+  sigsq_beta1 ~ gamma(a_sigsq_beta1, b_sigsq_beta1);
+}
+"
+stanhlv2(m)
+@
+\normalsize
+\item Create a suitable data representation in R then compile and run the Stan programme.
+<<eval=echo, echo=echo, message=FALSE, warning=FALSE, results="hide", cache=TRUE>>=
+## Set up data to pass to stan function in its "data" argument:
+y = Oxboys$height                       # Response var. (height)
+x = Oxboys$age                          # Covariate (age)
+subj_label = as.numeric(Oxboys$Subject) # Subject label
+N_subj = length(unique(subj_label))     # Number of subjects
+
+## Data for random intercept model (from Chapter 5):
+oxboys_ri_data = list(y=y, N=length(y), N_subj=N_subj, 
+             x=x, subj_label=subj_label,
+             m_alpha0=140, s_alpha0=3, m_beta0=15, s_beta0=7.5,
+             a_sigsq=1.1, b_sigsq=0.025,
+             a_sigsq_alpha1=1.1, b_sigsq_alpha1=0.05)
+
+## Data for random slope model:
+oxboys_rs_data = oxboys_ri_data
+oxboys_rs_data[["a_sigsq_beta1"]] = 1.1
+oxboys_rs_data[["b_sigsq_beta1"]] = 0.1
+
+## Compile and run Stan programme:
+chains = 4
+iter = 20000
+thin = 10
+oxboys_rs_stan = stan("oxboys_ranslope.stan", data=oxboys_rs_data, 
+                      chains=chains, iter=iter, warmup=iter/2, 
+                      thin=thin)
+@
+\normalsize
+\item Check both numerical and graphical diagnostics.
+
+<<eval=echo, echo=echo, fig.keep="none">>=
+## Numerical diagnostics (here omitting the output for the
+## random effects in alpha1 and beta1 to save space):
+print(oxboys_rs_stan, pars=c("alpha1", "beta1"), include=FALSE)
+
+# Graphical diagnostics:
+oxboys_rs_stan_arr = as.array(oxboys_rs_stan)
+diagnostics(oxboys_rs_stan_arr)
+## Rhat values all close to 1, n_eff large, graphical 
+## diagnostics give no cause for concern. However, note
+## that this required a larger sample than the default
+## of iter=2000.
+@
+
+<<results="hide", dev='pdf', eval=echo, echo=FALSE, fig.env='figure', fig.cap="First page of graphical diagnostics for random slope model.">>=
+diagnostics(oxboys_rs_stan_arr[,,1:3])
+@
+
+\item \textbf{More difficult:} Modify the Stan programmes for the random intercept model and random slope model to include a \cc{generated quantities} block which computes the deviance of the model. (This will be similar to the code for the linear regression model in Chapter~3). Compute the DIC for each model and use it to decide which model is better according to this criterion.
+<<eval=echo, echo=FALSE, results="asis">>=
+m = "
+// Random intercept model, saved in oxboys_ranintercept_dev.stan
+functions {
+  real deviance(vector y, vector x, int[] subj_label, 
+                real alpha0, vector alpha1, real beta0, 
+                real sigsq) {
+    real dev;
+    vector[num_elements(y)] alpha;
+    vector[num_elements(y)] eta;
+    alpha = alpha0 + alpha1[subj_label]; // Random intercept
+    eta = alpha + beta0 * x; // Single matrix-vector calculation
+    dev = (-2) * normal_lpdf(y | eta, sqrt(sigsq)); /* 
+                                  Vectorized form of the normal 
+                                  probability function */
+    return dev;
+  }
+}
+// ...
+// Stan programme for random intercept model from Chapter 5 
+// ...
+generated quantities {
+  real dev; // Deviance
+  dev = deviance(y, x, subj_label, alpha0, alpha1, beta0, sigsq);
+}
+"
+stanhlv2(m)
+@
+
+<<eval=echo, echo=FALSE, results="asis">>=
+m = "
+// Random slope model, saved in oxboys_ranslope_dev.stan
+functions {
+  real deviance(vector y, vector x, int[] subj_label, 
+                real alpha0, vector alpha1, real beta0, 
+                vector beta1, real sigsq) {
+    real dev;
+    vector[num_elements(y)] alpha;
+    vector[num_elements(y)] beta;
+    vector[num_elements(y)] eta;
+    alpha = alpha0 + alpha1[subj_label]; // Random intercept
+    beta = beta0 + beta1[subj_label];    // Random slope
+    eta = alpha + beta .* x; // Single matrix-vector calculation
+    dev = (-2) * normal_lpdf(y | eta, sqrt(sigsq)); /* 
+                                  Vectorized form of the normal 
+                                  probability function */
+    return dev;
+  }
+}
+// ...
+// Stan programme for random slope model above 
+// ...
+generated quantities {
+  real dev; // Deviance
+  dev = deviance(y, x, subj_label, alpha0, alpha1, beta0, 
+                 beta1, sigsq);
+}
+"
+stanhlv2(m)
+@
+
+<<eval=echo, echo=echo, message=FALSE, warning=FALSE, results="hide", cache=TRUE>>=
+## Compile and run the random intercept programme:
+oxboys_ri_stan = stan("oxboys_ranintercept_dev.stan", data=oxboys_ri_data, 
+                      chains=chains, iter=iter, warmup=iter/2, 
+                      thin=thin)
+## Compile and run the random slope programme:
+oxboys_rs_stan = stan("oxboys_ranslope_dev.stan", data=oxboys_rs_data, 
+                      chains=chains, iter=iter, warmup=iter/2, 
+                      thin=thin)
+@
+<<eval=echo, echo=echo>>=
+## Compute the DIC for the random intercept model:
+output = as.array(oxboys_ri_stan)
+(D_bar = mean(output[,,"dev"])) # Posterior expectation of deviance
+alpha0_bar = mean(output[,,"alpha0"])
+alpha1_bar = apply(output[,,paste("alpha1[",1:26,"]", sep="")], 
+                   3, mean) 
+beta0_bar = mean(output[,,"beta0"])
+sigsq_bar = mean(output[,,"sigsq"]) # Posterior mean of params
+expose_stan_functions(oxboys_ri_stan) # Export deviance function
+D_theta_bar = deviance(oxboys_ri_data$y, oxboys_ri_data$x, 
+                          oxboys_ri_data$subj_label, alpha0_bar, 
+                          alpha1_bar, beta0_bar, sigsq_bar) 
+                          # Deviance at posterior mean
+(pD = D_bar - D_theta_bar) # Effective number of parameters
+(DIC = D_bar + pD) # DIC
+
+## Compute the DIC for the random slope model:
+output = as.array(oxboys_rs_stan)
+(D_bar = mean(output[,,"dev"])) # Posterior expectation of deviance
+alpha0_bar = mean(output[,,"alpha0"])
+alpha1_bar = apply(output[,,paste("alpha1[",1:26,"]", sep="")], 
+                   3, mean) 
+beta0_bar = mean(output[,,"beta0"])
+beta1_bar = apply(output[,,paste("beta1[",1:26,"]", sep="")], 
+                   3, mean) 
+sigsq_bar = mean(output[,,"sigsq"]) # Posterior mean of params
+expose_stan_functions(oxboys_rs_stan) # Export deviance function
+D_theta_bar = deviance(oxboys_rs_data$y, oxboys_rs_data$x, 
+                          oxboys_rs_data$subj_label, alpha0_bar, 
+                          alpha1_bar, beta0_bar, beta1_bar, 
+                          sigsq_bar) 
+                          # Deviance at posterior mean
+(pD = D_bar - D_theta_bar) # Effective number of parameters
+(DIC = D_bar + pD) # DIC
+
+## The random slope model has the smaller DIC and so is
+## to be preferred.
+@
+\end{itemize}
+
+\section{Hierarchical model for rat tumour data}
+In this section we will consider a well-known data set that is amenable to Bayesian hierarchical modelling. The data are available from the \cc{jrRstan} package and concern the proportion of rats developing tumours in a number of laboratory studies. We can load the data via:
+<<>>=
+data(rats)
+head(rats)
+@
+\noindent Our goal is to learn about the population probability of tumour amongst rats.
+
+For study $i$, $i=1,\ldots,N$, $n_i$ denotes the total number of rats and $Y_i$ denotes the number of rats who developed a tumour. To allow for the differences between studies in rats and experimental conditions, we let the probability of developing a tumour vary between studies and denote it by $p_i$ for study $i$. We then assume the $Y_i$ are independent binomial random variables given the study-specific probabilities $p_i$:
+\begin{equation*}
+Y_i | n_i, p_i \sim \bin(n_i, p_i), \quad \text{independently for $i=1,2,\ldots,N$},
+\end{equation*}
+where here $N=71$. Suppose we initially thought the probabilities $p_i$ might be around $0.1$. If we were to learn that one probability $p_i$ was larger than $0.1$, this would cause us to revise upwards our ``best guess'' at the probabilities for other studies because we expect the $p_i$ to be similar. To formalise this idea, we will assume the $p_i$ are samples from some population distribution with common mean and variance. This is an example of a \emph{Bayesian hierarchical model}. For convenience, we will reparameterise the binomial distributions so that instead of working with probabilities $p_i$ we work with their logit transformations:
+\begin{equation*}
+\theta_i = \log \left( \frac{p_i}{1 - p_i} \right)
+\end{equation*}
+and assume that
+\begin{equation*}
+\theta_i | \mu, \sigma^2 \sim \norm(\mu, \sigma^2).
+\end{equation*}
+We allow the parameters $\mu$ and $\sigma^2$ to be unknown and give them prior distributions:
+\begin{equation*}
+\mu \sim \norm(m_\mu, s_\mu^2) \quad \text{and} \quad \sigma^2 \sim \gam(a_{\sigma^2}, b_{\sigma^2}).
+\end{equation*}
+The mean $\mu$ can be thought of as the population value for the logit-probability of tumour amongst rats. The variance $\sigma^2$ quantifies the degree of variation in the population; the larger its value, the more heterogeneity we see in the probabilities between studies.
+
+\begin{itemize}
+\item Write a Stan model to represent the hierarchical model above.
+<<eval=echo, echo=FALSE, results="asis">>=
+m = "
+// Hierarchical model for rat tumour data, saved in rats.stan
+data {
+  int<lower=0> N;        // No. studies (sample size)
+  int<lower=0> y[N];     // No. of rats with tumours
+  int<lower=0> n[N];     // Total number of rats
+  real m_mu;             // Prior mean for mu
+  real<lower=0> s_mu;    // Prior std. dev. for mu
+  real<lower=0> a_sigsq; // Prior shape for sigsq
+  real<lower=0> b_sigsq; // Prior rate for sigsq
+}
+parameters {
+  vector[N] theta;
+  real mu;
+  real<lower=0> sigsq;
+}
+model {
+  // Likelihood:
+  y ~ binomial_logit(n, theta);
+  // Prior:
+  theta ~ normal(mu, sqrt(sigsq));
+  // \"Hyperprior\":
+  mu ~ normal(m_mu, s_mu);
+  sigsq ~ gamma(a_sigsq, b_sigsq);
+}
+generated quantities {
+  vector<lower=0, upper=1>[N] p; /* Study-specific probability
+                                    of tumour */ 
+  real<lower=0, upper=1> p_pop; /* \"Population\" probability
+                                    of tumour */
+  p = inv_logit(theta);
+  p_pop = inv_logit(mu); 
+}
+"
+stanhlv2(m)
+@
+\normalsize
+\item Take 
+\begin{equation*}
+m_\mu = 0, \quad s_\mu^2 = 2, \quad a_{\sigma^2} = 1.1, \quad b_{\sigma^2} = 1.3.
+\end{equation*}
+Create a suitable data representation in R then compile and run the Stan programme.
+<<eval=echo, echo=echo, message=FALSE, warning=FALSE, results="hide", cache=TRUE>>=
+## Set up data to pass to stan function in its "data" argument:
+rats_data = list(N=nrow(rats), y=rats$y, n=rats$n,
+                 m_mu=0, s_mu=sqrt(2), a_sigsq=1.1, b_sigsq=1.3)
+
+## Compile and run Stan programme:
+chains = 4
+iter = 2000
+thin = 1
+rats_stan = stan("rats.stan", data=rats_data, 
+                  chains=chains, iter=iter, warmup=iter/2, 
+                  thin=thin)
+
+rats_reparam_stan = stan("rats_reparam.stan", data=rats_data, 
+                         chains=chains, iter=iter, warmup=iter/2, 
+                         thin=thin)
+@
+\normalsize
+\item Check both numerical and graphical diagnostics.
+
+<<eval=echo, echo=echo, fig.keep="none">>=
+## Numerical diagnostics (here just printing a couple to save
+## space):
+print(rats_stan, pars=c("mu", "sigsq", "p_pop"))
+
+## Graphical diagnostics
+rats_stan_arr = as.array(rats_stan)
+diagnostics(rats_stan_arr)
+## Rhat values all close to 1, n_eff large, graphical 
+## diagnostics give no cause for concern.
+@
+
+<<results="hide", dev='pdf', eval=echo, echo=FALSE, fig.env='figure', fig.cap="First page of the graphical diagnostics for the rat tumour example.">>=
+diagnostics(rats_stan_arr[,,1:3])
+@
+
+<<eval=echo, echo=FALSE, results="asis">>=
+m = "
+/* When using HMC to sample the posterior of hierarchical 
+   models, it can sometimes improve mixing if we adopt a 
+   different parameterisation that \"decouples\" the model
+   and top level prior specifications. For the rats example,
+   the Stan programme based on the decoupled parameterisation 
+   is shown below. See Section 15.5 in Gelman et al. (2013)
+   for further details. */
+data {
+  int<lower=0> N;        // No. studies (sample size)
+  int<lower=0> y[N];     // No. of rats with tumours
+  int<lower=0> n[N];     // Total number of rats
+  real m_mu;             // Prior mean for mu
+  real<lower=0> s_mu;    // Prior std. dev. for mu
+  real<lower=0> a_sigsq; // Prior shape for sigsq
+  real<lower=0> b_sigsq; // Prior rate for sigsq
+}
+parameters {
+  vector[N] phi; // New parameters
+  real mu;
+  real<lower=0> sigsq;
+}
+model {
+  // Likelihood:
+  y ~ binomial_logit(n, mu + sqrt(sigsq) * phi);
+  // Prior:
+  phi ~ normal(0, 1);
+  // \"Hyperprior\":
+  mu ~ normal(m_mu, s_mu);
+  sigsq ~ gamma(a_sigsq, b_sigsq);
+}
+generated quantities {
+  vector[N] theta;
+  vector<lower=0, upper=1>[N] p; /* Study-specific probability
+                                    of tumour */ 
+  real<lower=0, upper=1> p_pop; /* \"Population\" probability
+                                    of tumour */
+  theta = mu + sqrt(sigsq) * phi; // Original parameters
+  p = inv_logit(theta);
+  p_pop = inv_logit(mu); 
+}
+"
+stanhlv2(m)
+@
+
+<<eval=echo, echo=echo, message=FALSE, warning=FALSE, results="hide", cache=TRUE>>=
+## In this example, the decoupled parameterisation offers
+## a marginal improvement in mixing ...
+rats_reparam_stan = stan("rats_reparam.stan", data=rats_data, 
+                         chains=chains, iter=iter, warmup=iter/2, 
+                         thin=thin)
+@
+
+<<eval=echo, echo=echo>>=
+## ... as illustrated by, e.g.
+print(rats_reparam_stan, pars=c("mu", "sigsq", "p_pop"))
+@
+\end{itemize}
+
+
+
+\section{Three state mixture model$^{\ast}$}
+In Section~5.4 we fitted a mixture model with $K=2$ components to the \cc{faithful} data on the times between successive eruptions of the Old Faithful geyser:
+<<>>=
+data(faithful)
+head(faithful)
+@
+\noindent In the two-component case, we had component membership probabilities $(\pi_1,\pi_2)$ which summed to one and so we reparameterised the model as $\pi_1=\pi$ and $\pi_2=1-\pi$ where $0 \le \pi \le 1$. We represented this in Stan as a constrained real:
+<<eval=TRUE, echo=FALSE, results="asis">>=
+m = "
+real<lower=0,upper=1> pi;
+"
+stanhlv2(m)
+@
+\normalsize
+\noindent In the more general case with $K$ components we have vector $(\pi_1,\pi_2,\ldots,\pi_K)$ on the $K$-dimensional simplex. This can be represented in Stan as a \cc{simplex} vector type:
+<<eval=TRUE, echo=FALSE, results="asis">>=
+m = "
+simplex[K] pi_vec;
+"
+stanhlv2(m)
+@
+\normalsize
+\noindent In the case of two-components, we assigned \cc{pi} a symmetric Beta prior:
+<<eval=TRUE, echo=FALSE, results="asis">>=
+m = "
+// Prior:
+pi ~ beta(a_pi, a_pi);
+"
+stanhlv2(m)
+@
+\normalsize
+\noindent The multivariate generalisation of this is a symmetric Dirichlet prior.  
+
+\begin{itemize}
+\item Use the \cc{lookup} function to find the Dirichlet distribution in the Stan manual:
+<<eval=echo>>=
+lookup("Dirichlet") # Simply search for string rather than 
+                    # the name of a particular R function.
+@
+\normalsize
+\noindent Try to generalise the Stan programme from Figure~5.7 so that it allows the number $K$ of states to be a component of the \cc{list} you pass to the \cc{stan} function through its \cc{data} argument. 
+
+<<eval=echo, echo=FALSE, results="asis">>=
+m = "
+/* General K component mixture of normals, saved in
+   oldfaithful_gen.stan */
+data {
+  int<lower=0> N;        // Sample size
+  int<lower=1> K;        // Number of components
+  vector[N] y;           // Data
+  real<lower=0> a_pi;    /* Repeated prior hyperparameter
+                            for pi_vec */
+  real m_mu;             // Prior mean for mu[k]
+  real<lower=0> s_mu;    // Prior std. dev. for mu[k]
+  real<lower=0> a_siqsq; // Prior shape for sigsq[k]
+  real<lower=0> b_sigsq; // Prior rate for sigsq[k]
+}
+transformed data {
+  vector<lower=0>[K] a_pi_vec;
+  for(k in 1:K) a_pi_vec[k] = a_pi;
+}
+parameters {
+  simplex[K] pi_vec;
+  ordered[K] mu;
+  vector<lower=0>[K] sigsq;
+}
+model {
+  vector[K] tmp;
+  // Likelihood:
+  for(n in 1:N) {
+    for(k in 1:K) {
+      tmp[k] = log(pi_vec[k]) + normal_lpdf(y[n] | mu[k], sqrt(sigsq[k]));  
+    }
+    target += log_sum_exp(tmp);
+  }
+  // Prior:
+  pi_vec ~ dirichlet(a_pi_vec);
+  mu ~ normal(m_mu, s_mu);
+  sigsq ~ inv_gamma(a_siqsq, b_sigsq);
+}
+"
+stanhlv2(m)
+@
+\normalsize
+\item Test the programme by compiling it then running it with $K=2$ and $K=3$ components.
+
+<<eval=echo, echo=echo, message=FALSE, warning=FALSE, results="hide", cache=TRUE>>=
+## Set up data to pass to stan function in its "data" argument:
+faithful_2_data = list(N=nrow(faithful), y=log(faithful$waiting),
+                       K=2, a_pi=3, m_mu=4, s_mu=1, 
+                       a_siqsq=4, b_sigsq=0.04)
+
+faithful_3_data = faithful_2_data
+faithful_3_data[["K"]] = 3
+
+faithful_3_data[["s_mu"]] = 0.1 # (Try with s_mu=1 and see what 
+                                #  happens ... )
+
+## Compile and run Stan programme:
+chains = 4
+iter = 2000
+thin = 1
+faithful_2_stan = stan("oldfaithful_gen.stan", data=faithful_2_data, 
+                       chains=chains, iter=iter, warmup=iter/2, 
+                       thin=thin)
+
+iter = 20000
+thin = 10
+faithful_3_stan = stan("oldfaithful_gen.stan", data=faithful_3_data, 
+                       chains=chains, iter=iter, warmup=iter/2, 
+                       thin=thin)
+@
+
+<<eval=echo, echo=echo, fig.keep="none">>=
+## Numerical diagnostics for two component model:
+print(faithful_2_stan)
+
+## Graphical diagnostics for two component model:
+faithful_2_stan_arr = as.array(faithful_2_stan)
+diagnostics(faithful_2_stan_arr)
+## Rhat values all close to 1, n_eff large, graphical 
+## diagnostics give no cause for concern.
+@
+
+<<results="hide", dev='pdf', eval=echo, echo=FALSE, fig.env='figure', fig.cap="First page of graphical diagnostics for two component mixture.">>=
+diagnostics(faithful_2_stan_arr[,,1:3])
+@
+
+<<eval=echo, echo=echo, fig.keep="none">>=
+## Numerical diagnostics for three component model:
+print(faithful_3_stan)
+
+## Graphical diagnostics for three component model:
+faithful_3_stan_arr = as.array(faithful_3_stan)
+diagnostics(faithful_3_stan_arr)
+## Numerical and graphical diagnostics do not look
+## great, even with lots of iterations and thinning. 
+## Components 1 and 2 are very similar so I suspect
+## there is some overfitting which is affecting the
+## performance of the sampler.
+@
+
+<<results="hide", dev='pdf', eval=echo, echo=FALSE, fig.env='figure', fig.cap="First page of graphical diagnostics for three component mixture.">>=
+diagnostics(faithful_3_stan_arr[,,1:3])
+@
+
+\end{itemize}
+
+\section{Survival with right censoring$^{\ast}$}
+In this section we will consider another generalised linear model, this time assuming an \emph{exponential} error distribution. The data we will consider concern the survival times $T_n$ for $n=1,\ldots,N$, in months, of $N=148$ renal patients following kidney transplants. There is one covariate $x_n$ for each patient, namely the total number of HLA-B or DR antigen mismatches between the donor and recipient; we might expect survival times to be shorter if there are more mismatches. For some patients, the month of death is observed. However, for others the survival time is \emph{right-censored} meaning we do not observe the time of death, only a time at which the patient was known still to be alive. This can happen for lots of reasons, for example, the study may have ended before the patient died or the patient may have been lost to follow-up. We introduce an indicator variable $s_n$ representing the censoring status of the patient. We set $s_n=1$ if the corresponding observation $t_n$ on $T_n$ represents the survival time of patient $n$. On the other hand, we set $s_n=0$ if the observation $t_n$ on $T_n$ is a right-censored time, meaning all we know is that the survival time of patient $n$ is greater than $t_n$, i.e. $T_n > t_n$.
+
+The \cc{renal} data set in the \cc{jrRstan} package contains the survival data:
+<<>>=
+data(renal)
+head(renal)
+@
+
+Our model for the survival times can be expressed as:
+\begin{equation*}
+T_n | \lambda_n \sim \expo(\lambda_n), \quad \text{independently for $n=1,2,\ldots,N$},
+\end{equation*}
+where $\lambda_n = \exp(\eta_n)$ is the reciprocal of the mean survival time for patient $n$. The corresponding \emph{linear predictor} $\eta_n$ takes the form:
+\begin{equation*}
+\eta_n = \beta_1 + \beta_2 x_n.
+\end{equation*}
+We adopt the following prior for the two model parameters:
+\begin{equation*}
+\beta_1 \sim \norm(0, 30^2), \quad \text{and, independently,} \quad \beta_2 \sim \norm(0, 30^2).
+\end{equation*}
+
+If all the survival times were observed, i.e. if $s_n=1$ for all $n=1,\ldots,N$, the likelihood would take the form:
+\begin{equation*}
+\prod_{n=1}^N p(t_n | \lambda_n)
+\end{equation*}
+in which patient $n$ contributes $p(t_n | \lambda_n)$ to the likelihood function, namely the density function of the $\expo(\lambda_n)$ distribution evaluated at the observed survival time $T_n = t_n$. However, if the time for patient $n$ is right-censored our observation $t_n$ does not represent the survival time $T_n$, and we only know that $T_n > t_n$. For such patients the contribution to the likelihood is therefore $\Pr(T_n > t_n | \lambda_n)$ which is the \emph{survival function}, or \emph{complementary cumulative distribution function}, of the $\expo(\lambda_n)$ distribution evaluated at the censored time $t_n$. Overall, therefore, the likelihood takes the form
+\begin{equation*}
+\prod_{n: s_n=1} p(t_n | \lambda_n) \times \prod_{n: s_n=0} \Pr(T_n > t_n | \lambda_n)
+\end{equation*}
+where the first term is a product over the patients for whom we observe the survival times and the second term is a product over the patients whose survival times are right-censored. Because the Stan modelling language is very flexible, we can handle the non-standard second term in the likelihood by incrementing the log posterior density using the \cc{target} keyword\sidenote{As in the mixture model example.} and the log complementary cumulative distribution function of the exponential distribution, \cc{exponential\_lccdf}.
+
+\begin{itemize}
+\item Write a Stan model to represent the model and prior above.
+<<eval=echo, echo=FALSE, results="asis">>=
+m = "
+// Survival model with right-censoring, saved in renal_intout.stan
+data {
+  int<lower=0> N_obs;             /* No. patients with observed 
+                                     survival times */
+  int<lower=0> N_cens;            /* No. patients with right-censored 
+                                     times */
+  int<lower=1> J;                 // No. columns in design matrix
+  vector<lower=0>[N_obs] t_obs;   // Observed survival times
+  vector<lower=0>[N_cens] t_cens; // Right-censored times
+  matrix[N_obs, J] X_obs;         /* Design matrix for observed 
+                                     patients */
+  matrix[N_cens, J] X_cens;       /* Design matrix for  
+                                     right-censored patients */
+  real beta_mean[J];              // Means in beta prior
+  real<lower=0> beta_sd[J];       // Std. devs in beta prior
+}
+parameters {
+  vector[J] beta;
+}
+model {
+  // Likelihood for observed patients:
+  t_obs ~ exponential(exp(X_obs * beta));
+  // Likelihood for right-censored patients:
+  target += exponential_lccdf(t_cens | exp(X_cens * beta));
+  // Prior:
+  beta ~ normal(beta_mean, beta_sd);
+}
+"
+stanhlv2(m)
+@
+\normalsize
+\item Create a suitable data representation in R then compile and run the Stan programme.
+<<eval=echo, echo=echo, message=FALSE, warning=FALSE, results="hide", cache=TRUE>>=
+## Set up data to pass to stan function in its "data" argument:
+N_obs = nrow(renal[renal$status==1,])  # No. observed patients
+N_cens = nrow(renal[renal$status==0,]) # No. right-censored patients
+X_obs = matrix(1, N_obs, 2)            # Design matrix for observed 
+X_obs[,2] = renal$x[renal$status==1]   # patients
+X_cens = matrix(1, N_cens, 2)          # Design matrix for
+X_cens[,2] = renal$x[renal$status==0]  # right-censored patients
+
+renal_data = list(N_obs=N_obs, N_cens=N_cens,
+                  t_obs = renal$t[renal$status==1], 
+                  t_cens = renal$t[renal$status==0],
+                  X_obs=X_obs, X_cens=X_cens, J=2,
+                  beta_mean = c(0, 0), beta_sd = c(30, 30))
+
+## Compile and run Stan programme:
+chains = 4
+iter = 10000
+thin = 5
+renal_stan = stan("renal_intout.stan", data=renal_data, 
+                   chains=chains, iter=iter, warmup=iter/2, 
+                   thin=thin)
+@
+\normalsize
+\item Check both numerical and graphical diagnostics.
+
+<<FS2, eval=echo, echo=echo, fig.keep="none">>=
+## Numerical diagnostics:
+print(renal_stan)
+
+## Graphical diagnostics:
+renal_stan_arr = as.array(renal_stan)
+diagnostics(renal_stan_arr)
+## Rhat values all close to 1, n_eff large, graphical 
+## diagnostics give no cause for concern.
+@
+
+<<ref.label='FS2', results="hide", dev='pdf', eval=echo, echo=FALSE, fig.env='figure', fig.cap="Graphical diagnostics for the survival model with right-censoring.">>=
+@
+\end{itemize}
+
+\section*{Solutions}
+
+Solutions are available as a vignette:
+<<eval=FALSE>>=
+library("jrRstan")
+vignette("solutions2", package="jrRstan")
+@
+
+
+\end{document}
+

@@ -24,3 +24,4 @@ data(sideeffect)
 head(sideeffect)
 }
 \keyword{datasets}
+
