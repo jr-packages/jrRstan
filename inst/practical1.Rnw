@@ -197,7 +197,7 @@ barplot(table(x))
 
 \subsection{Course R package}
 
-Installing the the course R package is straightforward. First install \cc{drat}:
+Installing the course R package is straightforward. First install \cc{drat}:
 
 <<eval=FALSE, tidy=FALSE>>=
 install.packages("drat")
@@ -206,7 +206,7 @@ install.packages("drat")
 \noindent Then
 
 <<eval=FALSE, tidy=FALSE>>=
-drat::addRepo("rcourses")
+drat::addRepo("jr-packages")
 install.packages("jrRstan")
 @ 
 
@@ -416,7 +416,7 @@ generated quantities {
   for(n in 1:N) {
     /* Define xz in a block so that it becomes a
        local variable that will not be printed */
-       real xz[2];
+    real xz[2];
     xz[1] = bernoulli_rng(p);
     xz[2] = uniform_rng(a, b);
     y[n] = normal_rng(2.5 * xz[1] + 1.5 * xz[2], 0.1);
