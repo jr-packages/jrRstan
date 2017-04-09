@@ -227,7 +227,7 @@ stan(file="simulation.stan", data=faulty_constants, iter=1,
               chains=1, algorithm="Fixed_param")
 @
 
-\item Add a \cc{transformed parameter} block and include a print statement to check whether the constants, \cc{N} and \cc{p}, have been correctly passed.
+\item Add a \cc{transformed data} block and include a print statement to check whether the constants, \cc{N} and \cc{p}, have been correctly passed.
 
 <<eval=echo, echo=FALSE, results="asis">>=
 m = "
