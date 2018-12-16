@@ -1,9 +1,8 @@
 functions {
   real deviance(vector y, matrix X, vector beta, real sigma_sq) {
-    real dev;
-    vector[num_elements(y)] eta;
-    eta = X * beta; // Single matrix-vector calculation
-    dev = (-2) * normal_lpdf(y | eta, sqrt(sigma_sq)); /* 
+    vector[num_elements(y)] eta = X * beta; /* Single matrix-vector 
+                                               calculation */
+    real dev = (-2) * normal_lpdf(y | eta, sqrt(sigma_sq)); /* 
                                   Vectorized form of the normal 
                                   probability function */
     return dev;
@@ -26,8 +25,7 @@ parameters {
 }
 model {
   // Likelihood:
-  vector[N] eta;
-  eta = X * beta; // Single matrix-vector calculation
+  vector[N] eta = X * beta; // Single matrix-vector calculation
   y ~ normal(eta, sqrt(sigma_sq)); /* Vectorized form of the normal 
                                       probability function */
   // Prior:
@@ -40,10 +38,8 @@ generated quantities {
   real dev; // Deviance
   // Sample from predictive distribution:
   {
-    real eta_pred; // Predicted mean; defined in local
-                   // block so not stored
-    eta_pred = x_pred * beta; /* Single matrix-vector 
-                                 calculation */
+    real eta_pred = x_pred * beta; /* Single matrix-vector 
+                                      calculation */
     y_pred = normal_rng(eta_pred, sqrt(sigma_sq));
   }
   dev = deviance(y, X, beta, sigma_sq);

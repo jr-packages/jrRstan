@@ -26,10 +26,10 @@ parameters {
 }
 model {
   // Likelihood:
-  vector[N] alpha;
-  vector[N] beta;
-  alpha = alpha0 + alpha1[subj_label]; // Random intercept
-  beta = beta0 + beta1[subj_label];    // Random slope
+  vector[N] alpha = alpha0 + alpha1[subj_label]; 
+                               // Random intercept
+  vector[N] beta = beta0 + beta1[subj_label];    
+                               // Random slope
   y ~ normal(alpha + beta .* x, sqrt(sigsq));
   // Prior:
   alpha0 ~ normal(m_alpha0, s_alpha0);

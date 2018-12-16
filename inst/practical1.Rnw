@@ -263,10 +263,8 @@ output = stan(file="simulation.stan", data=constants, iter=1,
 m = "
 // New Stan programme, saved in simulation_v2.stan:
 transformed data {
-  int<lower=1> N;
-  real<lower=0,upper=1> p;
-  N = 30;
-  p = 0.8;
+  int<lower=1> N = 30;
+  real<lower=0,upper=1> p = 0.8;
 }
 model {
 }
@@ -302,14 +300,10 @@ lookup("runif")
 m = "
 // Modified Stan programme, saved in simulation_v3.stan:
 transformed data {
-  int<lower=1> N;
-  real<lower=0,upper=1> p;
-  real a;
-  real b;
-  N = 30;
-  p = 0.8;
-  a = -3;
-  b = 3;
+  int<lower=1> N = 30;
+  real<lower=0,upper=1> p = 0.8;
+  real a = -3;
+  real b = 3;
 }
 model {
 }
@@ -438,10 +432,9 @@ In this part of the practical we will investigate the efficiency gains we can re
 m = "
 functions {
   real deviance(vector y, matrix X, vector beta, real sigma_sq) {
-    real dev;
-    vector[num_elements(y)] eta;
-    eta = X * beta; // Single matrix-vector calculation
-    dev = (-2) * normal_lpdf(y | eta, sqrt(sigma_sq)); /* 
+    vector[num_elements(y)] eta = X * beta; /* Single matrix-vector 
+                                               calculation */
+    real dev = (-2) * normal_lpdf(y | eta, sqrt(sigma_sq)); /* 
                                   Vectorized form of the normal 
                                   probability function */
     return dev;
@@ -464,8 +457,7 @@ parameters {
 }
 model {
   // Likelihood:
-  vector[N] eta;
-  eta = X * beta; // Single matrix-vector calculation
+  vector[N] eta = X * beta; // Single matrix-vector calculation
   y ~ normal(eta, sqrt(sigma_sq)); /* Vectorized form of the normal 
                                       probability function */
   // Prior:
@@ -478,10 +470,8 @@ generated quantities {
   real dev; // Deviance
   // Sample from predictive distribution:
   {
-    real eta_pred; /* Predicted mean; defined in local
-                      block so not stored */
-    eta_pred = x_pred * beta; /* Single matrix-vector 
-                                 calculation */
+    real eta_pred = x_pred * beta; /* Single matrix-vector 
+                                      calculation */
     y_pred = normal_rng(eta_pred, sqrt(sigma_sq));
   }
   dev = deviance(y, X, beta, sigma_sq);
@@ -507,7 +497,7 @@ fig3_1 = stan("figure3_1.stan", data=practical1_data)
 ## Run the revised programme:
 fig3_1_v2 = stan("figure3_1_v2.stan", data=practical1_data)
 @
-We will consider the \cc{stan} function and its usage in Chapter~4. For now, simply make a note of the time taken to run each programme. (It will be printed at the bottom of the Stan output). How much speed-up do you gain by using the revised programme?
+We will consider the \cc{stan} function and its usage in Chapter~4. For now, simply make a note of the time taken to run each programme. (You can access this by passing the object returned by the \cc{stan} function to the \cc{get\_elapsed\_time} function). How much speed-up do you gain by using the revised programme?
 
 <<eval=echo, echo=echo>>=
 ## I get a substantial speed up on my machine:
