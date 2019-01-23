@@ -1,8 +1,7 @@
 Package: jrRstan
 Type: Package
 Title: The jrRstan package
-Version: 0.1.0
-Date: 2017-01-23
+Version: 0.1.1
 Authors@R: person("Sarah", "Heaps",
     email="sarah.heaps@ncl.ac.uk", role =
     c("aut", "cre"))
@@ -20,7 +19,10 @@ Depends:
     graphics
 Suggests:
     Rdpack,
-    R.rsp
+    R.rsp,
+    rstan,
+    shinystan,
+    RcppEigen
 LazyData: TRUE
 RoxygenNote: 5.0.1
 RdMacros: Rdpack
