@@ -1,19 +1,47 @@
+# https://discourse.mc-stan.org/t/rstan-rstantools-travis/6102
 language: r
+sudo: true
 cache: packages
 
-notifications:
-  email:
-    on_success: change
-    on_failure: change
+
+matrix:
+  include:
+    - os: linux
+      dist: trusty
+      r: release
+      r_binary_packages:
+        - devtools
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-7
+      env:
+        - MATRIX_EVAL="CC=gcc-7 && CXX=g++-7"
+    - os: linux
+      dist: trusty
+      r: devel
+      r_binary_packages:
+        - devtools
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-7
+      env:
+        - MATRIX_EVAL="CC=gcc-7 && CXX=g++-7"
+
+     
+before_install:
+  - mkdir -p ~/.R/
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then echo "CXX14 = g++-7 -fPIC" >> ~/.R/Makevars; fi
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then echo "CXX14FLAGS = -mtune=native -march=native -Wno-unused-variable -Wno-unused-function -Wno-unused-local-typedefs -Wno-ignored-attributes -Wno-deprecated-declarations -Wno-attributes -O3" >> ~/.R/Makevars; fi
+  - tlmgr install fancyvrb units
 
 r_packages:
   - drat
-
-before_install:
-  - tlmgr install fancyvrb units
-
-#before_script:
-#  - make
 
 after_success:
   - wget https://raw.githubusercontent.com/jr-packages/drat/master/deploy.sh
