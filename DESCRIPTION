@@ -24,7 +24,8 @@ Suggests:
     R.rsp,
     RcppEigen,
     lintr,
-    testthat
+    testthat,
+    drat
 LazyData: TRUE
 RoxygenNote: 5.0.1
 RdMacros: Rdpack
