@@ -499,7 +499,7 @@ fig3_1 = stan("figure3_1.stan", data=practical1_data)
 ## Run the revised programme:
 fig3_1_v2 = stan("figure3_1_v2.stan", data=practical1_data)
 @
-We will consider the \cc{stan} function and its usage in Chapter~4. For now, simply make a note of the time taken to run each programme. (It will be printed at the bottom of the Stan output). How much speed-up do you gain by using the revised programme?
+We will consider the \cc{stan} function and its usage in Chapter~4. For now, simply make a note of the time taken to run each programme. (You can access this by passing the object returned by the \cc{stan} function to the \cc{get\_elapsed\_time} function). How much speed-up do you gain by using the revised programme?
 
 <<eval=echo, echo=echo>>=
 ## I get a substantial speed up on my machine:

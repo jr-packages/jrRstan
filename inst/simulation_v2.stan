@@ -1,8 +1,6 @@
 transformed data {
-  int<lower=1> N;
-  real<lower=0,upper=1> p;
-  N = 30;
-  p = 0.8;
+  int<lower=1> N = 30;
+  real<lower=0,upper=1> p = 0.8;
 }
 model {
 }
