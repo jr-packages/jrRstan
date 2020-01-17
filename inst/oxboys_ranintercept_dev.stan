@@ -2,12 +2,9 @@ functions {
   real deviance(vector y, vector x, int[] subj_label, 
                 real alpha0, vector alpha1, real beta0, 
                 real sigsq) {
-    real dev;
-    vector[num_elements(y)] alpha;
-    vector[num_elements(y)] eta;
-    alpha = alpha0 + alpha1[subj_label]; // Random intercept
-    eta = alpha + beta0 * x; // Single matrix-vector calculation
-    dev = (-2) * normal_lpdf(y | eta, sqrt(sigsq)); /* 
+    vector[num_elements(y)] alpha = alpha0 + alpha1[subj_label]; // Random intercept
+    vector[num_elements(y)] eta = alpha + beta0 * x; // Single matrix-vector calculation
+    real dev = (-2) * normal_lpdf(y | eta, sqrt(sigsq)); /* 
                                   Vectorized form of the normal 
                                   probability function */
     return dev;
@@ -37,9 +34,8 @@ parameters {
 }
 model {
   // Likelihood:
-  real alpha;
   for(n in 1:N) {
-    alpha = alpha0 + alpha1[subj_label[n]]; // Random intercept
+    real alpha = alpha0 + alpha1[subj_label[n]]; // Random intercept
     y[n] ~ normal(alpha + beta0 * x[n], sqrt(sigsq));
   }
   // Prior:
@@ -51,8 +47,8 @@ model {
   sigsq_alpha1 ~ gamma(a_sigsq_alpha1, b_sigsq_alpha1);
 }
 generated quantities {
-  real dev; // Deviance
-  dev = deviance(y, x, subj_label, alpha0, alpha1, 
-                    beta0, sigsq);
+  // Deviance:
+  real dev = deviance(y, x, subj_label, alpha0, alpha1, 
+                      beta0, sigsq);
 }
 

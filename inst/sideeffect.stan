@@ -19,8 +19,7 @@ parameters {
   vector[K] beta;
 }
 model {
-  vector[N] eta;
-  eta = X * beta; // Fast matrix-vector calculation
+  vector[N] eta = X * beta; // Fast matrix-vector calculation
   // Likelihood:
   y ~ binomial_logit(n, eta); /* Arithmetically stable form of fast,
                                  vectorized sampling statement */

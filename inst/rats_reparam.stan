@@ -22,12 +22,10 @@ model {
   sigsq ~ gamma(a_sigsq, b_sigsq);
 }
 generated quantities {
-  vector[N] theta;
-  vector<lower=0, upper=1>[N] p; /* Study-specific 
-                                    prob. of tumour */ 
-  real<lower=0, upper=1> p_pop; /* "Population" prob.
-                                    of tumour */
-  theta = mu + sqrt(sigsq) * phi; // Original parameters
-  p = inv_logit(theta);
-  p_pop = inv_logit(mu); 
+  vector[N] theta = mu + sqrt(sigsq) * phi; /* 
+                        Original parameters */
+  vector<lower=0, upper=1>[N] p = inv_logit(theta); /* 
+                     Study-specific prob. of tumour */ 
+  real<lower=0, upper=1> p_pop = inv_logit(mu); /* 
+                   "Population" prob. of tumour */
 }

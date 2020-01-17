@@ -136,7 +136,7 @@ stanhlv2 = function(x) {
 \maketitle% this prints the handout title, author, and date
 
 \begin{abstract}
-The aim of this practical is to provide an introduction to the syntax and structure of the Stan programming language and to demonstrate some of the efficiency gains that can be achieved by using vectorized operations.
+The aim of this practical is to provide an introduction to the syntax and structure of the Stan programming language and to demonstrate some of the efficiency gains that vectorized operations can provide.
 \end{abstract}
 
 \section{Getting started}
@@ -220,7 +220,7 @@ library("jrRstan")
 In the Stan programme above, we are not attempting to carry out any inference. Instead we're using the \cc{generated quantities} block to sample some data; in this case a random sample of size $30$ from the Bernoulli distribution with probability $0.8$. In other words a sequence of 30 $0$s and $1$s where the probability of getting a $1$ is $0.8$. When we simply want to use Stan to simulate data in this way, notice that the (required) model block is empty. We will learn about the \cc{stan} function in Chapter~4, but for now, we simply note that the \cc{file} argument should be the name of the text file where the Stan programme is saved and, if the programme contains a \cc{data} block, the \cc{data} argument should be a \cc{list} with a named element for each variable declared. When it is being used to simulate data, we generally set \cc{algorithm="Fixed\_param"}, \cc{iter=1} and \cc{chains=1}. 
 
 \begin{itemize}
-\item What happens if you try to pass a value for \cc{N} or \cc{p} that violates the constraints in the \cc{data} block? For example, what happens if you set:
+\item What happens if you try to pass value for \cc{N} or \cc{p} that violate the constraints in the \cc{data} block? For example, what happens if:
 <<echo=c(1,echo*2), eval=c(1,echo*2)>>=
 faulty_constants = list(N=30, p=10)
 stan(file="simulation.stan", data=faulty_constants, iter=1, 
@@ -251,7 +251,7 @@ generated quantities {
 stanhlv2(m)
 @
 
-<<eval=echo, echo=echo, messages=FALSE, warning=FALSE>>=
+<<eval=echo, echo=echo, message=FALSE, warning=FALSE>>=
 ## Compile and run modified Stan programme:
 output = stan(file="simulation.stan", data=constants, iter=1, 
               chains=1, algorithm="Fixed_param")
@@ -263,10 +263,8 @@ output = stan(file="simulation.stan", data=constants, iter=1,
 m = "
 // New Stan programme, saved in simulation_v2.stan:
 transformed data {
-  int<lower=1> N;
-  real<lower=0,upper=1> p;
-  N = 30;
-  p = 0.8;
+  int<lower=1> N = 30;
+  real<lower=0,upper=1> p = 0.8;
 }
 model {
 }
@@ -302,14 +300,10 @@ lookup("runif")
 m = "
 // Modified Stan programme, saved in simulation_v3.stan:
 transformed data {
-  int<lower=1> N;
-  real<lower=0,upper=1> p;
-  real a;
-  real b;
-  N = 30;
-  p = 0.8;
-  a = -3;
-  b = 3;
+  int<lower=1> N = 30;
+  real<lower=0,upper=1> p = 0.8;
+  real a = -3;
+  real b = 3;
 }
 model {
 }
@@ -438,10 +432,9 @@ In this part of the practical we will investigate the efficiency gains we can re
 m = "
 functions {
   real deviance(vector y, matrix X, vector beta, real sigma_sq) {
-    real dev;
-    vector[num_elements(y)] eta;
-    eta = X * beta; // Single matrix-vector calculation
-    dev = (-2) * normal_lpdf(y | eta, sqrt(sigma_sq)); /* 
+    vector[num_elements(y)] eta = X * beta; /* Single matrix-vector 
+                                               calculation */
+    real dev = (-2) * normal_lpdf(y | eta, sqrt(sigma_sq)); /* 
                                   Vectorized form of the normal 
                                   probability function */
     return dev;
@@ -464,8 +457,7 @@ parameters {
 }
 model {
   // Likelihood:
-  vector[N] eta;
-  eta = X * beta; // Single matrix-vector calculation
+  vector[N] eta = X * beta; // Single matrix-vector calculation
   y ~ normal(eta, sqrt(sigma_sq)); /* Vectorized form of the normal 
                                       probability function */
   // Prior:
@@ -478,14 +470,14 @@ generated quantities {
   real dev; // Deviance
   // Sample from predictive distribution:
   {
-    real eta_pred; /* Predicted mean; defined in local
-                      block so not stored */
-    eta_pred = x_pred * beta; /* Single matrix-vector 
-                                 calculation */
+    // Predicted mean, defined in local block so not stored:
+    real eta_pred = x_pred * beta; /* Single matrix-vector 
+                                      calculation */
     y_pred = normal_rng(eta_pred, sqrt(sigma_sq));
   }
   dev = deviance(y, X, beta, sigma_sq);
 }
+
 "
 stanhlv2(m)
 @

@@ -1,10 +1,8 @@
 functions {
   real deviance(vector y, matrix X, vector beta, real sigma_sq) {
-    real dev;
-    dev = 0;
+    real dev = 0;
     for(n in 1:num_elements(y)) {
-      real eta;
-      eta = 0;
+      real eta = 0;
       for (k in 1:cols(X)) {
         eta = eta + X[n, k] * beta[k];
       }
@@ -40,8 +38,7 @@ transformed parameters {
 model {
   // Likelihood:
   for (n in 1:N) {
-    real eta;
-    eta = 0;
+    real eta = 0;
     for (k in 1:K) {
       eta = eta + X[n, k] * beta[k];
     }
@@ -58,9 +55,8 @@ generated quantities {
   real dev; // Deviance
   // Sample from predictive distribution:
   {
-    real eta_pred; // Predicted mean; defined in local
-                   // block so not stored
-    eta_pred = 0;
+    real eta_pred = 0; /* Predicted mean; defined in local
+                          block so not stored */
     for (k in 1:K) {
       eta_pred = eta_pred + x_pred[k] * beta[k];
     }
