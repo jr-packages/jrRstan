@@ -1,3 +1,4 @@
+# nolint start
 #' @title Graphical diagnostics for arrays of MCMC output.
 #'
 #' @description
@@ -34,7 +35,7 @@
 #' @importFrom graphics lines par plot
 #' @importFrom stats acf density ts var
 #' @export
-diagnostics = function(mcmc, rows=3, lag.max=50, pool=FALSE, colours=NULL) {
+diagnostics = function(mcmc, rows = 3, lag.max = 50, pool = FALSE, colours = NULL) {
   op = par(mfrow = c(rows, 3), ask = FALSE) # Avoid prompt for first plot
   if (!is.array(mcmc)) {
     stop("mcmc object must be an array.")
@@ -119,3 +120,5 @@ add.alpha = function(col, alpha=1) {
   return(apply(sapply(col, col2rgb) / 255, 2,
                function(x) rgb(x[1], x[2], x[3], alpha = alpha)))
 }
+
+# nolint end

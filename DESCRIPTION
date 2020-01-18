@@ -1,31 +1,34 @@
-Package: jrRstan
 Type: Package
+Package: jrRstan
 Title: The jrRstan package
 Version: 0.1.2
-Authors@R: person("Sarah", "Heaps",
-    email = "sarah.heaps@ncl.ac.uk", 
-    role = c("aut", "cre"))
-Maintainer: Sarah Heaps
-    <sarah.heaps@ncl.ac.uk>
-Description: A package for the Jumping
-    Rivers R courses.
-URL: https://www.jumpingrivers.com/
-VignetteBuilder: R.rsp
+Authors@R: 
+    person(given = "Sarah",
+           family = "Heaps",
+           role = c("aut", "cre"),
+           email = "sarah.heaps@ncl.ac.uk")
+Maintainer: Sarah Heaps <sarah.heaps@ncl.ac.uk>
+Description: A package for the Jumping Rivers R
+    courses.
 License: GPL-3 | GPL-2
+URL: https://www.jumpingrivers.com/
 Imports:
-    plyr,
-    stats,
-    grDevices,
     graphics,
+    grDevices,
+    plyr,
+    rstan,
     shinystan,
-    rstan
+    stats
 Suggests:
-    Rdpack,
+    drat,
+    lintr,
     R.rsp,
     RcppEigen,
-    lintr,
-    testthat,
-    drat
+    Rdpack
+VignetteBuilder: 
+    R.rsp
+RdMacros: 
+    Rdpack
+Encoding: UTF-8
 LazyData: TRUE
 RoxygenNote: 5.0.1
-RdMacros: Rdpack
