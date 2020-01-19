@@ -20,7 +20,6 @@ Imports:
     shinystan,
     stats
 Suggests:
-    drat,
     lintr,
     R.rsp,
     RcppEigen,
