@@ -31,4 +31,3 @@ head(rats)
 \insertRef{Tar82}{jrRstan}
 }
 \keyword{datasets}
-

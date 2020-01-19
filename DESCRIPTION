@@ -1,7 +1,7 @@
 Type: Package
 Package: jrRstan
 Title: The jrRstan package
-Version: 0.1.2
+Version: 0.1.3
 Authors@R: 
     person(given = "Sarah",
            family = "Heaps",
@@ -20,7 +20,6 @@ Imports:
     shinystan,
     stats
 Suggests:
-    drat,
     lintr,
     R.rsp,
     RcppEigen,
@@ -31,4 +30,4 @@ RdMacros:
     Rdpack
 Encoding: UTF-8
 LazyData: TRUE
-RoxygenNote: 5.0.1
+RoxygenNote: 7.0.2

@@ -33,4 +33,3 @@ data(api)
 head(api)
 }
 \keyword{datasets}
-

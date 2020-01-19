@@ -44,4 +44,3 @@ head(centipedes)
 \insertRef{BFA02}{jrRstan}
 }
 \keyword{datasets}
-

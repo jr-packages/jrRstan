@@ -31,7 +31,7 @@
 #' dimnames(srs) = list(NULL, NULL, paste("theta[",1:4,"]",sep=""))
 #' diagnostics(srs)
 #'
-#' @import plyr
+#' @importFrom plyr alply
 #' @importFrom graphics lines par plot
 #' @importFrom stats acf density ts var
 #' @export
