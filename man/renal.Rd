@@ -32,4 +32,3 @@ head(renal)
 \insertRef{HM91}{jrRstan}
 }
 \keyword{datasets}
-

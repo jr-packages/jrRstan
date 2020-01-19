@@ -31,4 +31,4 @@ RdMacros:
     Rdpack
 Encoding: UTF-8
 LazyData: TRUE
-RoxygenNote: 5.0.1
+RoxygenNote: 7.0.2

@@ -29,4 +29,3 @@ data(practical1_data)
 str(practical1_data)
 }
 \keyword{datasets}
-
