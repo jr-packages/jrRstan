@@ -1,7 +1,7 @@
 Type: Package
 Package: jrRstan
 Title: The jrRstan package
-Version: 0.1.4
+Version: 0.1.401
 Authors@R: 
     person(given = "Sarah",
            family = "Heaps",
