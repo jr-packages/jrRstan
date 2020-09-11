@@ -1,6 +1,6 @@
 Type: Package
 Package: jrRstan
-Title: The jrRstan package
+Title: Jumping Rivers: Introduction to Bayesian inference using RStan
 Version: 0.1.401
 Authors@R: 
     person(given = "Sarah",
@@ -30,4 +30,4 @@ RdMacros:
     Rdpack
 Encoding: UTF-8
 LazyData: TRUE
-RoxygenNote: 7.0.2
+RoxygenNote: 7.1.1
