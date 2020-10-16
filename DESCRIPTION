@@ -1,12 +1,17 @@
 Type: Package
 Package: jrRstan
-Title: Jumping Rivers: Introduction to Bayesian inference using RStan
-Version: 0.1.401
+Title: Jumping Rivers: Introduction to Bayesian inference using
+    RStan
+Version: 0.2.0
 Authors@R: 
-    person(given = "Sarah",
-           family = "Heaps",
-           role = c("aut", "cre"),
-           email = "sarah.heaps@ncl.ac.uk")
+    c(person(given = "Sarah",
+             family = "Heaps",
+             role = c("aut", "cre"),
+             email = "sarah.heaps@ncl.ac.uk"),
+      person(given = "Jumping",
+             family = "Rivers",
+             role = "aut",
+             email = "info@jumpingrivers.com"))
 Maintainer: Sarah Heaps <sarah.heaps@ncl.ac.uk>
 Description: A package for the Jumping Rivers R
     courses.
