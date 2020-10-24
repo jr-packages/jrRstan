@@ -2,7 +2,7 @@ Type: Package
 Package: jrRstan
 Title: Jumping Rivers: Introduction to Bayesian inference using
     RStan
-Version: 0.2.0
+Version: 0.2.1
 Authors@R: 
     c(person(given = "Sarah",
              family = "Heaps",
@@ -13,8 +13,8 @@ Authors@R:
              role = "aut",
              email = "info@jumpingrivers.com"))
 Maintainer: Sarah Heaps <sarah.heaps@ncl.ac.uk>
-Description: A package for the Jumping Rivers R
-    courses.
+Description: A package for the Jumping Rivers RStan
+    course.
 License: GPL-3 | GPL-2
 URL: https://www.jumpingrivers.com/
 Imports:
@@ -28,11 +28,14 @@ Suggests:
     lintr,
     R.rsp,
     RcppEigen,
-    Rdpack
+    Rdpack,
+    stanhl
 VignetteBuilder: 
     R.rsp
 RdMacros: 
     Rdpack
+Remotes: 
+    jr-packages/stanhl
 Encoding: UTF-8
 LazyData: TRUE
 RoxygenNote: 7.1.1
